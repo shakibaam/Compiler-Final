@@ -3,6 +3,8 @@
 #
 # A simple calculator with variables -- all in one file.
 # -----------------------------------------------------------------------------
+import copy
+
 keywords = {
     'if': 'IF',
     'then': 'THEN',
@@ -131,7 +133,7 @@ glob_temp = Temp()
 
 def backpatch(l: list, i: int):
     for line_number in l:
-        prv_tuple = quadruples[line_number - 1]
+        prv_tuple = quadruples[line_number-1 ]
         new_tuple = (prv_tuple[0], i)
         quadruples[line_number - 1] = new_tuple
 
@@ -149,6 +151,7 @@ class E:
     def __init__(self, t, f):
         self.truelist = t
         self.falselist = f
+        self.addr = ""
 
 
 def p_expression_or(t):
@@ -174,8 +177,10 @@ def p_expression_unot(t):
 
 def p_expression_group(t):
     """expression : LPAREN expression RPAREN"""
-    t[0] = t[2]
-    quadruples.append(('(' + str(t[2]) + ')'))
+    t[0] = copy.deepcopy(t[2])
+    # t[0] = E([], [])
+    # t[0].addr = t[2]
+    # quadruples.append(('(' + str(t[2].addr) + ')'))
 
 
 def p_expression_true(t):
@@ -193,13 +198,16 @@ def p_expression_false(t):
 # our code
 def p_expression_integer(t):
     """expression : INTEGER"""
-    t[0] = t[1]
+    t[0] = E([], [])
+    t[0].addr = t[1]
 
 
 def p_expression_id(t):
     """expression : ID"""
-    names.append(t[1])
-    t[0] = t[1]
+    t[0] = E([], [])
+    t[0].addr = t[1]
+    if(t[1] not in names):
+        names.append(t[1])
 
 
 # def p_expression_real(t):
@@ -209,35 +217,43 @@ def p_expression_id(t):
 
 def p_expression_plus(t):
     """expression : expression PLUS expression"""
-    quadruples.append((t[0] + '=' + str(t[1]) + '+' + str(t[3])))
+    t[0] = E([], [])
+    t[0].addr = glob_temp.newTemp()
+    quadruples.append((t[0].addr + '=' + str(t[1].addr) + '+' + str(t[3].addr),))
 
 
 def p_expression_minus(t):
     """expression : expression MINUS expression"""
-    quadruples.append((t[0] + '=' + str(t[1]) + '-' + str(t[3])))
+    t[0] = E([], [])
+    t[0].addr = glob_temp.newTemp()
+    quadruples.append((t[0].addr + '=' + str(t[1].addr) + '-' + str(t[3].addr),))
 
 
 def p_expression_uminus(t):
-    """expression : UMINUS expression"""
-    t[0] = -t[2]
+    """expression : MINUS expression %prec UMINUS"""
+    t[0] = E([], [])
+    t[0].addr = "-" + str(t[2].addr)
 
 
 def p_expression_times(t):
     """expression : expression TIMES expression"""
-    t[0] = glob_temp.newTemp()
-    quadruples.append((t[0] + '=' + str(t[1]) + '*' + str(t[3])))
+    t[0] = E([], [])
+    t[0].addr = glob_temp.newTemp()
+    quadruples.append((t[0].addr + '=' + str(t[1].addr) + '*' + str(t[3].addr)))
 
 
 def p_expression_div(t):
     """expression : expression DIVIDE expression"""
-    t[0] = glob_temp.newTemp()
-    quadruples.append((t[0] + '=' + str(t[1]) + '/' + str(t[3])))
+    t[0] = E([], [])
+    t[0].addr = glob_temp.newTemp()
+    quadruples.append((t[0].addr + '=' + str(t[1].addr) + '/' + str(t[3].addr),))
 
 
 def p_expression_mod(t):
     """expression : expression MOD expression"""
-    t[0] = glob_temp.newTemp()
-    quadruples.append((t[0] + '=' + str(t[1]) + '%' + str(t[3])))
+    t[0] = E([], [])
+    t[0].addr = glob_temp.newTemp()
+    quadruples.append((t[0].addr + '=' + str(t[1].addr) + '%' + str(t[3].addr),))
 
 
 def p_expression_relop(t):
@@ -249,17 +265,19 @@ def p_expression_relop(t):
                        | expression MOREEQ expression"""
     t[0] = E([nextinstr()], [nextinstr() + 1])
     if t[2] == '<':
-        quadruples.append(('if ' + str(t[1]) + '<' + str(t[3]) + ' goto',))
+        quadruples.append(('if (' + str(t[1].addr) + '<' + str(t[3].addr) + ")" + ' goto',))
     if t[2] == '<=':
-        quadruples.append(('if ' + str(t[1]) + '<=' + str(t[3]) + ' goto',))
+        quadruples.append(('if (' + str(t[1].addr) + '<=' + str(t[3].addr) + ")" + ' goto',))
     if t[2] == '<>':
-        quadruples.append(('if ' + str(t[1]) + '<>' + str(t[3]) + ' goto',))
+        quadruples.append(('if (' + str(t[1].addr) + '<>' + str(t[3].addr) + ")" + ' goto',))
     if t[2] == '=':
-        quadruples.append(('if ' + str(t[1]) + '=' + str(t[3]) + ' goto',))
+        quadruples.append(('if (' + str(t[1].addr) + '=' + str(t[3].addr) + ")" + ' goto',))
     if t[2] == '>':
-        quadruples.append(('if ' + str(t[1]) + '>' + str(t[3]) + ' goto',))
+        quadruples.append(('if (' + str(t[1].addr) + '>' + str(t[3].addr) + ")" + ' goto',))
     if t[2] == '>=':
-        quadruples.append(('if ' + str(t[1]) + '>=' + str(t[3]) + ' goto',))
+        quadruples.append(('if ( ' + str(t[1].addr) + '>=' + str(t[3].addr) + ")" + ' goto',))
+
+    t[0].addr = str(t[1]) + t[2] + str(t[3])
     quadruples.append(('goto',))
 
 
@@ -308,7 +326,7 @@ class N:
 def p_N(t):
     'N : '
     t[0] = N([])
-    pass
+
 
 
 class Statement:
@@ -318,9 +336,10 @@ class Statement:
 
 def p_statement_assign(t):
     """statement : ID ASSIGN expression"""
-    quadruples.append((str(t[1]) + '=' + str(t[3])))
+    quadruples.append((str(t[1]) + '=' + str(t[3].addr),))
     t[0] = Statement([])
-    names.append(t[1])
+    if (t[1] not in names):
+        names.append(t[1])
 
 
 def p_statement_ifthen(t):
@@ -359,8 +378,7 @@ def p_statement_compound(t):
 def p_statement_print(t):
     """statement : PRINT LPAREN expression RPAREN"""
     t[3] = str(t[3])
-    quadruples.append(('printf ' + t[3],))
-    pass
+    quadruples.append(('printf("%d\n",' + t[3].addr + ")",))
 
 
 class StatementList:
@@ -406,13 +424,15 @@ def p_type_int(t):
 def p_idList_id(t):
     """idList : ID"""
     t[0] = [t[1]]
-    names.append(t[1])
+    if (t[1] not in names):
+        names.append(t[1])
 
 
 def p_idList_idid(t):
     """idList : idList COMMA ID"""
     t[0] = t[1] + t[3]
-    names.append(t[1])
+    if (t[1] not in names):
+        names.append(t[1])
 
 
 def p_declarationList_type(t):
@@ -437,27 +457,108 @@ def p_declarations_empty(t):
 
 def p_program(t):
     """program : PROGRAM ID declarations compoundStatement"""
-    names.append(t[2])
+    if (t[2] not in names):
+        names.append(t[2])
 
 
 # Build the lexer
 import ply.lex as lex
-
 lexer = lex.lex()
-# string = 'begin x:=2 begin y:=3 end end'
+
+# string = 'if x<y and y<z then y:=3'
 # lexer.input(string)
 # for tok in lexer:
 #     print(tok)
 import ply.yacc as yacc
 
-parser = yacc.yacc(start='statementList')
 
-while True:
-    try:
-        s = input('calc > ')  # Use raw_input on Python 2
-    except EOFError:
-        break
-    r = parser.parse(s)
-    print(quadruples)
-    # print(r.truelist, r.falselist)
-    quadruples.clear()
+parser = yacc.yacc(start='statement')
+
+# while True:
+# try:
+#     s = input('calc > ')  # Use raw_input on Python 2
+# except EOFError:
+#     print("Error")
+# r = parser.parse(s)
+# print(quadruples)
+# print(r.truelist, r.falselist)
+# quadruples.clear()
+# s = input()
+# parser.parse(s)
+# print(quadruples)
+
+# read from file
+
+file1 = open('test.txt', 'r')
+Lines = file1.readlines()
+for line in Lines:
+    s = line.strip()
+    parser.parse(s)
+
+# write to c file
+
+with open('output.c', 'a') as the_file:
+    str1 = '#include <stdio.h>'
+    the_file.write(str1 + "\n")
+    print(str1)
+    if len(names) != 0:
+        str_names = 'int '
+        for i in range(len(names)):
+            if(i!=len(names)-1):
+                str_names += names[i] + ", "
+            else:str_names += names[i] + "; "
+    print(str_names)
+    the_file.write(str_names + "\n")
+
+    if len(glob_temp.temp_list) != 0:
+
+        str_temp = 'int '
+        for j in range(len(glob_temp.temp_list)):
+            if(j!=len(glob_temp.temp_list)-1):
+                str_temp += glob_temp.temp_list[j] + ", "
+            else:
+                str_temp += glob_temp.temp_list[j] + "; "
+
+        print(str_temp)
+        the_file.write(str_temp + "\n")
+
+    str_main = 'int main ()'
+    print(str_main)
+    the_file.write(str_main + "\n")
+
+    str_start = '{'
+    print(str_start)
+    the_file.write(str_start + "\n")
+
+    count = 1
+    for q in quadruples:
+
+        if (len(q) == 2):
+
+            if (count == 1):
+                str_q = str(q[0]) + " " + "label_" + str(q[1]) + ";"
+                print(str_q)
+                the_file.write(str_q + "\n")
+                count += 1
+            else:
+                str_q = str("label_" + str(count)) + ": " + str(q[0]) + " " + "label_" + str(q[1]) + ";"
+                print(str_q)
+                the_file.write(str_q + "\n")
+                count += 1
+
+        elif(len(q)==1):
+
+            if (count == 1):
+                str_q = str(q[0]) + ";"
+                print(str_q)
+                the_file.write(str_q + "\n")
+                count += 1
+            else:
+                str_q = str("label_" + str(count)) + ": " + str(q[0]) + ";"
+                print(str_q)
+                the_file.write(str_q + "\n")
+                count += 1
+
+    str_end = '}'
+    print(str_end)
+    the_file.write(str_end + "\n")
